@@ -703,8 +703,41 @@
       const sessions = VC_DATA[selectedUser];
       const buckets = {};
       sessions.forEach(([join, , diff]) => { const key = getBucketKey(join, currentView); buckets[key] = (buckets[key] || 0) + diff; });
-      const keys = Object.keys(buckets).sort();
-      const values = keys.map(k => Math.round(buckets[k] / 3600 * 100) / 100);
+
+      // Fill in all missing dates/months between min and max with 0
+      const rawKeys = Object.keys(buckets).sort();
+      let allKeys = [];
+      if (rawKeys.length > 1) {
+        const first = rawKeys[0];
+        const last = rawKeys[rawKeys.length - 1];
+        if (currentView === 'daily') {
+          const cur = new Date(first + 'T00:00:00');
+          const end = new Date(last + 'T00:00:00');
+          while (cur <= end) {
+            allKeys.push(cur.getFullYear() + '-' + String(cur.getMonth()+1).padStart(2,'0') + '-' + String(cur.getDate()).padStart(2,'0'));
+            cur.setDate(cur.getDate() + 1);
+          }
+        } else if (currentView === 'weekly') {
+          const cur = new Date(first + 'T00:00:00');
+          const end = new Date(last + 'T00:00:00');
+          while (cur <= end) {
+            allKeys.push(cur.getFullYear() + '-' + String(cur.getMonth()+1).padStart(2,'0') + '-' + String(cur.getDate()).padStart(2,'0'));
+            cur.setDate(cur.getDate() + 7);
+          }
+        } else { // monthly
+          let [fy, fm] = first.split('-').map(Number);
+          const [ly, lm] = last.split('-').map(Number);
+          while (fy < ly || (fy === ly && fm <= lm)) {
+            allKeys.push(fy + '-' + String(fm).padStart(2,'0'));
+            fm++; if (fm > 12) { fm = 1; fy++; }
+          }
+        }
+      } else {
+        allKeys = rawKeys;
+      }
+
+      const keys = allKeys;
+      const values = keys.map(k => buckets[k] ? Math.round(buckets[k] / 3600 * 100) / 100 : 0);
       const labels = keys.map(k => {
         if (currentView === 'monthly') { const [y, m] = k.split('-'); return MONTH_NAMES[parseInt(m) - 1] + ' ' + y.slice(2); }
         const [y, m, d] = k.split('-');
